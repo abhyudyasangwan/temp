@@ -53,3 +53,25 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
 
 /* HUD */
 #hud { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 3; background: rgba(10,12,18,.6); color: #e9ecf8; border: 1px solid #2a3042; border-radius: 10px; padding: 6px 10px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+
+/* Smooth animations for the capsule look/feel */
+.pillar .capsule {
+  transition: transform 180ms ease, filter 180ms ease, box-shadow 180ms ease;
+}
+
+/* Glow + slight punch while hovered */
+.pillar.hover .capsule {
+  /* soft outer glow + a touch brighter/saturated */
+  filter: drop-shadow(0 10px 24px rgba(90,140,255,.45)) brightness(1.05) saturate(1.06);
+  /* subtle rim to sell "glow" */
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.18),
+    0 0 0 2px rgba(140,180,255,.25);
+}
+
+/* (Optional) make the label feel a tad crisper on hover */
+.pillar.hover .label {
+  filter: brightness(1.08);
+  transition: filter 160ms ease;
+}
+
