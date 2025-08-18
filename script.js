@@ -34,7 +34,7 @@ function createPillarEl(label){
 }
 
 // Create pillars at fixed world angles
-aaa:
+// Create pillars at fixed world angles
 const pillars = [];
 for (let i = 0; i < PILLAR_COUNT; i++) {
   const el = createPillarEl('Project ' + (i+1));
@@ -116,5 +116,11 @@ window.addEventListener('touchcancel', ()=>{ dragging=false; }, {passive:true});
 window.addEventListener('touchmove', e=>{ if(!dragging) return; const t=e.touches[0]; if(!t) return; const dx=t.clientX-lastX; lastX=t.clientX; yaw = norm(yaw - dx*0.003); }, {passive:true});
 
 // Start loop
+// Start loop
 function start(){ requestAnimationFrame(render); }
-if (panoImg.complete) start(); else { panoImg.onload = start; panoImg.onerror = start; }
+
+document.addEventListener('DOMContentLoaded', () => {
+  if (panoImg.complete) start();
+  else { panoImg.onload = start; panoImg.onerror = start; }
+});
+
