@@ -1,6 +1,3 @@
-const PANO_DATA_URL = "https://github.com/abhyudyasangwan/temp/blob/main/pano.jpg"; // swap to your own data URL or hosted image when deploying
-
-// === CONFIG ===
 const HFOV = Math.PI/2;                  // 90° horizontal FOV
 const EDGE_FADE_INNER = HFOV * 0.92;     // for smooth fade near edges
 const EDGE_FADE_OUTER = HFOV * 0.995;    // clamp
@@ -11,7 +8,7 @@ const viewer = document.getElementById('viewer');
 const bg = document.getElementById('bg');
 const ctx = bg.getContext('2d');
 
-// Load panorama
+// Load panorama (fixed background)
 const panoImg = new Image();
 panoImg.crossOrigin = "anonymous"; // helps avoid canvas tainting if the server sends CORS headers
 panoImg.src = "https://raw.githubusercontent.com/abhyudyasangwan/temp/main/yruh.jpg";
@@ -62,7 +59,7 @@ function projectYawToX(relYaw, w){
   return half + nx*half;
 }
 
-// Draw the panorama by horizontally panning the image based on yaw
+// Draw the panorama — FIXED background (no horizontal panning with yaw)
 function drawPanorama(){
   const w = bg.width = viewer.clientWidth;
   const h = bg.height = viewer.clientHeight;
@@ -72,12 +69,13 @@ function drawPanorama(){
     ctx.fillStyle = grad; ctx.fillRect(0,0,w,h);
     return {w, h};
   }
+  // Scale to fit height (like before), but DO NOT offset by yaw; just center it
   const scale = h / panoImg.naturalHeight;
   const drawW = Math.ceil(panoImg.naturalWidth * scale);
   const drawH = h;
-  const pxPerRadian = drawW / TAU;
-  let offset = Math.round(-yaw * pxPerRadian) % drawW; if (offset < 0) offset += drawW;
-  let x = -offset; while (x < w) { ctx.drawImage(panoImg, 0,0, panoImg.naturalWidth, panoImg.naturalHeight, x, 0, drawW, drawH); x += drawW; }
+  const x0 = Math.floor((w - drawW) / 2);
+  ctx.clearRect(0,0,w,h);
+  ctx.drawImage(panoImg, 0,0, panoImg.naturalWidth, panoImg.naturalHeight, x0, 0, drawW, drawH);
   return {w, h};
 }
 
@@ -96,10 +94,10 @@ function render(){
     // Depth cues (center far, edges close)
     const edgeFrac = clamp(Math.abs(rel)/HFOV, 0, 1);
     const depth = Math.sin(edgeFrac * Math.PI/2);
-    const scale = 0.72 + 0.58*depth; // a bit chunkier now
+    const scale = 0.72 + 0.58*depth;
     const fade = 1 - smoothstep(EDGE_FADE_INNER, EDGE_FADE_OUTER, Math.abs(rel));
     const opacity = (0.6 + 0.4*depth) * fade;
-    const rotYdeg = (-rel*180/Math.PI) * 0.55; // turn with view
+    const rotYdeg = (-rel*180/Math.PI) * 0.55; // keep same turning look
 
     el.style.opacity = opacity.toFixed(3);
     el.style.zIndex = String(1000 + Math.round(depth*200));
@@ -114,7 +112,7 @@ function render(){
     const topDome = el.querySelector('.top-dome');
     topDome.style.opacity = (0.75 + 0.25*depth).toFixed(2);
 
-    // Bottom shading already strong; we slightly deepen with depth
+    // Bottom shading slightly deepens with depth
     const bottomShade = el.querySelector('.bottom-shade');
     bottomShade.style.opacity = (0.75 + 0.25*depth).toFixed(2);
   });
@@ -122,17 +120,19 @@ function render(){
   requestAnimationFrame(render);
 }
 
-// Drag to rotate yaw (horizontal only)
+// Drag to rotate yaw — VERY SLOW sensitivity
 let dragging = false, lastX = 0;
+const DRAG_SENS = 0.0006; // was 0.003 → ~5x slower
+
 viewer.addEventListener('mousedown', e=>{ dragging = true; lastX = e.clientX; viewer.classList.add('dragging'); });
 window.addEventListener('mouseup', ()=>{ dragging = false; viewer.classList.remove('dragging'); });
-window.addEventListener('mousemove', e=>{ if(!dragging) return; const dx = e.clientX - lastX; lastX = e.clientX; yaw = norm(yaw - dx*0.003); });
+window.addEventListener('mousemove', e=>{ if(!dragging) return; const dx = e.clientX - lastX; lastX = e.clientX; yaw = norm(yaw - dx*DRAG_SENS); });
 
 // Touch
 viewer.addEventListener('touchstart', e=>{ const t=e.touches[0]; if(!t) return; dragging=true; lastX=t.clientX; }, {passive:true});
 window.addEventListener('touchend', ()=>{ dragging=false; }, {passive:true});
 window.addEventListener('touchcancel', ()=>{ dragging=false; }, {passive:true});
-window.addEventListener('touchmove', e=>{ if(!dragging) return; const t=e.touches[0]; if(!t) return; const dx=t.clientX-lastX; lastX=t.clientX; yaw = norm(yaw - dx*0.003); }, {passive:true});
+window.addEventListener('touchmove', e=>{ if(!dragging) return; const t=e.touches[0]; if(!t) return; const dx=t.clientX-lastX; lastX=t.clientX; yaw = norm(yaw - dx*DRAG_SENS); }, {passive:true});
 
 // Start
 panoImg.onload = () => requestAnimationFrame(render);
