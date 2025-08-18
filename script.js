@@ -10,7 +10,7 @@ const ctx = bg.getContext('2d');
 
 const panoImg = new Image();
 panoImg.crossOrigin = "anonymous"; // helps avoid canvas tainting if the server sends CORS headers
-panoImg.src = "https://raw.githubusercontent.com/abhyudyasangwan/temp/main/yruh.jpg";
+panoImg.src = "https://abhyudyasangwan.github.io/temp/yruh.jpg"
 
 // Build a curved capsule pillar element
 function createPillarEl(label){
