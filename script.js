@@ -41,6 +41,10 @@ const pillars = [];
 for (let i = 0; i < PILLAR_COUNT; i++) {
   const el = createPillarEl('P' + (i+1));
   viewer.appendChild(el);
+
+  el.addEventListener('mouseenter', () => el.classList.add('hover'));
+  el.addEventListener('mouseleave', () => el.classList.remove('hover'));
+  
   pillars.push({ el, baseYaw: (i/PILLAR_COUNT)*Math.PI*2, pitch: -0.05 });
 }
 
@@ -99,7 +103,9 @@ function render(){
 
     el.style.opacity = opacity.toFixed(3);
     el.style.zIndex = String(1000 + Math.round(depth*200));
-    el.style.transform = `translate(-50%,-100%) scale(${scale.toFixed(3)}) rotateY(${rotYdeg.toFixed(2)}deg)`;
+    const isHover = el.classList.contains('hover');
+    const hoverBoost = isHover ? 1.08 : 1.0; // ~8% larger on hover
+    el.style.transform = `translate(-50%,-100%) scale(${(scale * hoverBoost).toFixed(3)}) rotateY(${rotYdeg.toFixed(2)}deg)`;
 
     // Adjust plinth size + darkness with proximity
     const plinth = el.querySelector('.plinth');
