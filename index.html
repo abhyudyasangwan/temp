@@ -1,14 +1,19 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>360° Portfolio</title>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <canvas id="pano"></canvas>
-  <div id="pillars"></div>
+  <div id="app">
+    <div id="viewer" aria-label="360 viewer">
+      <canvas id="bg" width="800" height="600"></canvas>
+      <div id="pillars"></div>
+    </div>
+    <div id="hud"><b>Drag horizontally</b> to look around. Click a pillar to open a project.</div>
+  </div>
 
   <script src="script.js"></script>
 </body>
