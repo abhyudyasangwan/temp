@@ -122,7 +122,7 @@ function render(){
 
 // Drag to rotate yaw — VERY SLOW sensitivity
 let dragging = false, lastX = 0;
-const DRAG_SENS = 0.0006; // was 0.003 → ~5x slower
+const DRAG_SENS = 0.0000006; // was 0.003 → ~5x slower
 
 viewer.addEventListener('mousedown', e=>{ dragging = true; lastX = e.clientX; viewer.classList.add('dragging'); });
 window.addEventListener('mouseup', ()=>{ dragging = false; viewer.classList.remove('dragging'); });
