@@ -1,6 +1,13 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
 #app { position: fixed; inset: 0; display: grid; grid-template-rows: 1fr; }
-#viewer { position: relative; inset: 0; cursor: grab; overflow: hidden; }
+/* Panoramic container fills the viewport */
+#viewer {
+  position: fixed;
+  inset: 0;          /* top:0; right:0; bottom:0; left:0 */
+  cursor: grab;
+  overflow: hidden;
+}
+
 #viewer.dragging { cursor: grabbing; }
 
 /* Panoramic background canvas */
