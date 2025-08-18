@@ -14,7 +14,7 @@ const ctx = bg.getContext('2d');
 // Load panorama
 const panoImg = new Image();
 panoImg.crossOrigin = "anonymous"; // helps avoid canvas tainting if the server sends CORS headers
-panoImg.src = "https://raw.githubusercontent.com/abhyudyasangwan/temp/main/pano.jpg";
+panoImg.src = "https://raw.githubusercontent.com/abhyudyasangwan/temp/main/yruh.jpg";
 
 // Build a curved capsule pillar element
 function createPillarEl(label){
