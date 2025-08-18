@@ -122,13 +122,13 @@ function render(){
 let dragging = false, lastX = 0;
 viewer.addEventListener('mousedown', e=>{ dragging = true; lastX = e.clientX; viewer.classList.add('dragging'); });
 window.addEventListener('mouseup', ()=>{ dragging = false; viewer.classList.remove('dragging'); });
-window.addEventListener('mousemove', e=>{ if(!dragging) return; const dx = e.clientX - lastX; lastX = e.clientX; yaw = norm(yaw - dx*0.003); });
+window.addEventListener('mousemove', e=>{ if(!dragging) return; const dx = e.clientX - lastX; lastX = e.clientX; yaw = norm(yaw - dx*0.0003); });
 
 // Touch
 viewer.addEventListener('touchstart', e=>{ const t=e.touches[0]; if(!t) return; dragging=true; lastX=t.clientX; }, {passive:true});
 window.addEventListener('touchend', ()=>{ dragging=false; }, {passive:true});
 window.addEventListener('touchcancel', ()=>{ dragging=false; }, {passive:true});
-window.addEventListener('touchmove', e=>{ if(!dragging) return; const t=e.touches[0]; if(!t) return; const dx=t.clientX-lastX; lastX=t.clientX; yaw = norm(yaw - dx*0.003); }, {passive:true});
+window.addEventListener('touchmove', e=>{ if(!dragging) return; const t=e.touches[0]; if(!t) return; const dx=t.clientX-lastX; lastX=t.clientX; yaw = norm(yaw - dx*0.0003); }, {passive:true});
 
 // Start
 panoImg.onload = () => requestAnimationFrame(render);
