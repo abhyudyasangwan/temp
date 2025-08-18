@@ -49,15 +49,13 @@ function norm(a){ a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.
 function smoothstep(edge0, edge1, x){ const t = clamp((x-edge0)/(edge1-edge0), 0, 1); return t*t*(3-2*t); }
 
 // Perspective projection for yaw→x. Clamp near the FOV edges to avoid tan() explosion
-function projectYawToX(relYaw, w){
-  const half = w / 2;
-  // Keep the same offscreen clamp behavior near FOV edges
-  if (Math.abs(relYaw) >= EDGE_FADE_OUTER) return relYaw > 0 ? w : 0;
-
-  // Cylindrical/equirectangular mapping: linear in angle across the FOV
-  // relYaw in [-HFOV/2, HFOV/2] maps to x in [0, w]
-  const nx = relYaw / (HFOV / 2); // -1 .. 1 within FOV
-  return half + nx * half;
+function projectYawToX_CYL(relYaw, w){
+  const half = w/2;
+  // Clamp to the visible window [-HFOV/2, +HFOV/2] so they vanish at edges
+  const max = HFOV/2;
+  if (Math.abs(relYaw) >= max) return relYaw > 0 ? w : 0;
+  const nx = relYaw / max; // -1..1
+  return half + nx*half;
 }
 
 // Draw the panorama by horizontally panning the image based on yaw
@@ -87,7 +85,7 @@ function render(){
     const rel = norm(baseYaw - yaw);
 
     // Screen placement
-    const x = projectYawToX(rel, w);
+    const x = projectYawToX_CYL(rel, w);
     const y = h*0.66 + pitch * (h*1.2); // slightly above horizon
     el.style.left = x + 'px';
     el.style.top  = y + 'px';
@@ -95,10 +93,10 @@ function render(){
     // Depth cues (center far, edges close)
     const edgeFrac = clamp(Math.abs(rel)/HFOV, 0, 1);
     const depth = Math.sin(edgeFrac * Math.PI/2);
-    const scale = 0.72 + 0.58*depth; // a bit chunkier now
+    const scale = 0.9 + 0.1 * (1 - Math.abs(rel)/(HFOV/2)); // subtle
     const fade = 1 - smoothstep(EDGE_FADE_INNER, EDGE_FADE_OUTER, Math.abs(rel));
     const opacity = (0.6 + 0.4*depth) * fade;
-    const rotYdeg = (-rel*180/Math.PI) * 0.55; // turn with view
+    const rotYdeg = (-rel*180/Math.PI) * 0.2; // or 0 for a pure “painted-in” look
 
     el.style.opacity = opacity.toFixed(3);
     el.style.zIndex = String(1000 + Math.round(depth*200));
