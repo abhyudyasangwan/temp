@@ -13,7 +13,7 @@ const ctx = bg.getContext('2d');
 
 // Load panorama
 const panoImg = new Image();
-panoImg.src = PANO_DATA_URL;
+panoImg.src = 'pano.jpg';
 
 // Build a curved capsule pillar element
 function createPillarEl(label){
