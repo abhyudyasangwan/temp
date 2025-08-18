@@ -1,6 +1,3 @@
-const PANO_DATA_URL = "DATAURL_PLACEHOLDER"; // swap to your own data URL or hosted image when deploying
-
-// === CONFIG ===
 const HFOV = Math.PI/2;                  // 90° horizontal FOV
 const EDGE_FADE_INNER = HFOV * 0.92;     // for smooth fade near edges
 const EDGE_FADE_OUTER = HFOV * 0.995;    // clamp
@@ -13,7 +10,7 @@ const ctx = bg.getContext('2d');
 
 const panoImg = new Image();
 panoImg.crossOrigin = "anonymous"; // helps avoid canvas tainting if the server sends CORS headers
-panoImg.src = "https://raw.githubusercontent.com/abhyudyasangwan/temp/main/pano.jpg";
+panoImg.src = "https://raw.githubusercontent.com/abhyudyasangwan/temp/main/yruh.jpg";
 
 // Build a curved capsule pillar element
 function createPillarEl(label){
