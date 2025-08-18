@@ -50,11 +50,14 @@ function smoothstep(edge0, edge1, x){ const t = clamp((x-edge0)/(edge1-edge0), 0
 
 // Perspective projection for yaw→x. Clamp near the FOV edges to avoid tan() explosion
 function projectYawToX(relYaw, w){
-  const half = w/2;
-  const limit = Math.tan(HFOV/2);
+  const half = w / 2;
+  // Keep the same offscreen clamp behavior near FOV edges
   if (Math.abs(relYaw) >= EDGE_FADE_OUTER) return relYaw > 0 ? w : 0;
-  const nx = Math.tan(relYaw)/limit; // -1..1 within FOV
-  return half + nx*half;
+
+  // Cylindrical/equirectangular mapping: linear in angle across the FOV
+  // relYaw in [-HFOV/2, HFOV/2] maps to x in [0, w]
+  const nx = relYaw / (HFOV / 2); // -1 .. 1 within FOV
+  return half + nx * half;
 }
 
 // Draw the panorama by horizontally panning the image based on yaw
