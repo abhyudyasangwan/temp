@@ -1,110 +1,136 @@
-const canvas = document.getElementById("pano");
-const ctx = canvas.getContext("2d");
-const pillarsDiv = document.getElementById("pillars");
+// ===== CONFIG =====
+const HFOV = Math.PI/2;                  // 90° horizontal FOV
+const EDGE_FADE_INNER = HFOV * 0.92;     // for smooth fade near edges
+const EDGE_FADE_OUTER = HFOV * 0.995;    // clamp
+const PILLAR_COUNT = 8;                  // fixed circular layout
+let yaw = 0;                             // camera heading
 
-let panoImg = new Image();
-panoImg.src = "pano.jpg"; // <--- place your stitched panorama here
+const viewer = document.getElementById('viewer');
+const bg = document.getElementById('bg');
+const pillarsLayer = document.getElementById('pillars');
+const ctx = bg.getContext('2d');
 
-const PILLAR_COUNT = 8;
-const HFOV = Math.PI / 2; // horizontal FOV
-let yaw = 0;
+// IMPORTANT: put your stitched panorama as pano.jpg in the repo root
+const panoImg = new Image();
+panoImg.src = 'pano.jpg';
 
-let dragging = false, lastX = 0, yawVel = 0;
+// Build a curved capsule pillar element
+function createPillarEl(label){
+  const wrap = document.createElement('div');
+  wrap.className = 'pillar';
+  wrap.style.setProperty('--w','170px');
+  wrap.style.setProperty('--h','260px');
 
-function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
+  const cap = document.createElement('div'); cap.className = 'capsule';
+  const body = document.createElement('div'); body.className = 'body';
+  const topDome = document.createElement('div'); topDome.className = 'top-dome';
+  const edgeL = document.createElement('div'); edgeL.className = 'edgeL';
+  const edgeR = document.createElement('div'); edgeR.className = 'edgeR';
+  const bottomShade = document.createElement('div'); bottomShade.className = 'bottom-shade';
+  const labelEl = document.createElement('div'); labelEl.className='label'; labelEl.textContent = label;
+  const plinth = document.createElement('div'); plinth.className='plinth';
+
+  cap.appendChild(body); cap.appendChild(topDome); cap.appendChild(edgeL); cap.appendChild(edgeR); cap.appendChild(bottomShade);
+  wrap.appendChild(cap); wrap.appendChild(labelEl); wrap.appendChild(plinth);
+  return wrap;
 }
-window.addEventListener("resize", resize);
-resize();
 
-// Create pillar elements
-let pillars = [];
+// Create pillars
+const pillars = [];
 for (let i = 0; i < PILLAR_COUNT; i++) {
-  let pillar = document.createElement("div");
-  pillar.className = "pillar";
-  pillar.innerHTML = `<div class="capsule"></div><div class="label">Project ${i+1}</div>`;
-  pillarsDiv.appendChild(pillar);
-  pillars.push({el: pillar, baseYaw: i / PILLAR_COUNT * 2 * Math.PI});
+  const el = createPillarEl('Project ' + (i+1));
+  pillarsLayer.appendChild(el);
+  pillars.push({ el, baseYaw: (i/PILLAR_COUNT)*Math.PI*2, pitch: -0.05 });
 }
 
-// Normalize angle into [-π, π]
-function norm(a) {
-  while (a > Math.PI) a -= 2 * Math.PI;
-  while (a < -Math.PI) a += 2 * Math.PI;
-  return a;
+const TAU = Math.PI*2;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+function norm(a){ a = (a + Math.PI) % TAU; if (a < 0) a += TAU; return a - Math.PI; }
+function smoothstep(edge0, edge1, x){ const t = clamp((x-edge0)/(edge1-edge0), 0, 1); return t*t*(3-2*t); }
+
+// Perspective projection for yaw→x. Clamp near the FOV edges to avoid tan() explosion
+function projectYawToX(relYaw, w){
+  const half = w/2;
+  const limit = Math.tan(HFOV/2);
+  if (Math.abs(relYaw) >= EDGE_FADE_OUTER) return relYaw > 0 ? w : 0;
+  const nx = Math.tan(relYaw)/limit; // -1..1 within FOV
+  return half + nx*half;
 }
 
-function drawPanorama() {
-  let w = canvas.width, h = canvas.height;
-  let imgW = panoImg.width, imgH = panoImg.height;
-  if (!imgW) return;
-
-  let drawH = h;
-  let drawW = imgW * (drawH / imgH);
-
-  let pxPerRad = drawW / (2 * Math.PI);
-  let offset = Math.round(-(yaw) * pxPerRad) % drawW;
-
-  ctx.clearRect(0, 0, w, h);
-  ctx.drawImage(panoImg, offset, 0, drawW, drawH);
-  if (offset > 0) ctx.drawImage(panoImg, offset - drawW, 0, drawW, drawH);
-  if (offset + drawW < w) ctx.drawImage(panoImg, offset + drawW, 0, drawW, drawH);
-}
-
-function updatePillars() {
-  let w = window.innerWidth, h = window.innerHeight, horizon = h * 0.65;
-
-  pillars.forEach((p, i) => {
-    let rel = norm(p.baseYaw - yaw);
-    if (Math.abs(rel) > Math.PI / 2) {
-      p.el.style.display = "none";
-      return;
-    }
-    p.el.style.display = "block";
-
-    let x = w / 2 + (w/2) * Math.tan(rel) / Math.tan(HFOV/2);
-    let depth = Math.sin(Math.min(Math.abs(rel) / HFOV, 1) * Math.PI / 2);
-    let scale = 0.72 + 0.58 * depth;
-    let zIndex = 100 + Math.round(depth * 100);
-
-    p.el.style.transform = `translateX(${x - 40}px) translateY(${horizon - 200*scale}px) scale(${scale})`;
-    p.el.style.zIndex = zIndex;
-    p.el.style.opacity = 0.3 + 0.7 * depth;
-  });
-}
-
-function animate() {
-  drawPanorama();
-  updatePillars();
-
-  yaw += yawVel;
-  yawVel *= 0.95; // inertia decay
-  requestAnimationFrame(animate);
-}
-animate();
-
-// Dragging controls
-canvas.addEventListener("mousedown", e => { dragging = true; lastX = e.clientX; });
-canvas.addEventListener("mouseup", () => dragging = false);
-canvas.addEventListener("mouseleave", () => dragging = false);
-canvas.addEventListener("mousemove", e => {
-  if (dragging) {
-    let dx = e.clientX - lastX;
-    yaw -= dx / 500;
-    yawVel = -(dx / 500);
-    lastX = e.clientX;
+// Draw the panorama by horizontally panning the image based on yaw
+function drawPanorama(){
+  const w = bg.width = viewer.clientWidth;
+  const h = bg.height = viewer.clientHeight;
+  if (!panoImg.complete || panoImg.naturalWidth === 0) {
+    // Fallback gradient so you don't see a black screen while image loads
+    const grad = ctx.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0,'#0a1220'); grad.addColorStop(1,'#0b0f18');
+    ctx.fillStyle = grad; ctx.fillRect(0,0,w,h);
+    return {w, h};
   }
-});
+  const scale = h / panoImg.naturalHeight;
+  const drawW = Math.ceil(panoImg.naturalWidth * scale);
+  const drawH = h;
+  const pxPerRadian = drawW / TAU;
+  let offset = Math.round(-yaw * pxPerRadian) % drawW; if (offset < 0) offset += drawW;
+  let x = -offset; while (x < w) { ctx.drawImage(panoImg, 0,0, panoImg.naturalWidth, panoImg.naturalHeight, x, 0, drawW, drawH); x += drawW; }
+  return {w, h};
+}
+
+function render(){
+  const {w, h} = drawPanorama();
+
+  pillars.forEach(({el, baseYaw, pitch}) => {
+    const rel = norm(baseYaw - yaw);
+
+    // Screen placement
+    const x = projectYawToX(rel, w);
+    const y = h*0.66 + pitch * (h*1.2); // slightly above horizon
+    el.style.left = x + 'px';
+    el.style.top  = y + 'px';
+
+    // Depth cues (center far, edges close)
+    const edgeFrac = clamp(Math.abs(rel)/HFOV, 0, 1);
+    const depth = Math.sin(edgeFrac * Math.PI/2);
+    const scale = 0.72 + 0.58*depth; // a bit chunkier now
+    const fade = 1 - smoothstep(EDGE_FADE_INNER, EDGE_FADE_OUTER, Math.abs(rel));
+    const opacity = (0.6 + 0.4*depth) * fade;
+    const rotYdeg = (-rel*180/Math.PI) * 0.55; // turn with view
+
+    el.style.opacity = opacity.toFixed(3);
+    el.style.zIndex = String(1000 + Math.round(depth*200));
+    el.style.transform = `translate(-50%,-100%) scale(${scale.toFixed(3)}) rotateY(${rotYdeg.toFixed(2)}deg)`;
+
+    // Adjust plinth size + darkness with proximity
+    const plinth = el.querySelector('.plinth');
+    plinth.style.width = (220 + 120*depth) + 'px';
+    plinth.style.opacity = (0.25 + 0.55*depth) * fade;
+
+    // Top-dome highlight intensity tracks proximity for punchy specular
+    const topDome = el.querySelector('.top-dome');
+    topDome.style.opacity = (0.75 + 0.25*depth).toFixed(2);
+
+    // Bottom shading already strong; we slightly deepen with depth
+    const bottomShade = el.querySelector('.bottom-shade');
+    bottomShade.style.opacity = (0.75 + 0.25*depth).toFixed(2);
+  });
+
+  requestAnimationFrame(render);
+}
+
+// Drag to rotate yaw (horizontal only)
+let dragging = false, lastX = 0;
+viewer.addEventListener('mousedown', e=>{ dragging = true; lastX = e.clientX; viewer.classList.add('dragging'); });
+window.addEventListener('mouseup', ()=>{ dragging = false; viewer.classList.remove('dragging'); });
+window.addEventListener('mousemove', e=>{ if(!dragging) return; const dx = e.clientX - lastX; lastX = e.clientX; yaw = norm(yaw - dx*0.003); });
 
 // Touch
-canvas.addEventListener("touchstart", e => { dragging = true; lastX = e.touches[0].clientX; });
-canvas.addEventListener("touchend", () => dragging = false);
-canvas.addEventListener("touchmove", e => {
-  if (dragging) {
-    let dx = e.touches[0].clientX - lastX;
-    yaw -= dx / 500;
-    yawVel = -(dx / 500);
-    lastX = e.touches[0].clientX;
-  }
-});
+viewer.addEventListener('touchstart', e=>{ const t=e.touches[0]; if(!t) return; dragging=true; lastX=t.clientX; }, {passive:true});
+window.addEventListener('touchend', ()=>{ dragging=false; }, {passive:true});
+window.addEventListener('touchcancel', ()=>{ dragging=false; }, {passive:true});
+window.addEventListener('touchmove', e=>{ if(!dragging) return; const t=e.touches[0]; if(!t) return; const dx=t.clientX-lastX; lastX=t.clientX; yaw = norm(yaw - dx*0.003); }, {passive:true});
+
+// Kick off once the image is at least attempted (fallback gradient prevents black screen)
+panoImg.onload = () => requestAnimationFrame(render);
+panoImg.onerror = () => requestAnimationFrame(render);
+requestAnimationFrame(render);
