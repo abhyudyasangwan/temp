@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- No global THREE scripts needed when using ES modules -->
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700&display=swap" rel="stylesheet">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Portfolio</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <!-- Custom Cursor -->
+  <div id="cursor">
+    <div class="cursor-ring"></div>
+    <div class="cursor-dot"></div>
+  </div>
+
+  <!-- Intro video overlay -->
+  <div id="intro" aria-hidden="true">
+    <video id="introVid" src="video.mov" muted playsinline autoplay preload="auto"></video>
+    <div class="vignette"></div>
+    <button id="skipIntro" type="button" aria-label="Skip intro">Skip</button>
+  </div>
+
+  <!-- Main app -->
+  <div id="app">
+    <nav id="top-left" aria-label="Secondary action">
+      <a class="icon-btn pill-btn" href="index.html" aria-label="Special">
+        <span>Back to Universe</span>
+      </a>
+    </nav>
+
+    <nav id="top-actions" aria-label="Primary actions">
+      <a class="icon-btn" href="work.html" aria-label="Work" title="Work">
+        <i class="img-icon" aria-hidden="true" style="--icon: url('workbut.png')"></i>
+      </a>
+      <a class="icon-btn" href="https://drive.google.com/drive/folders/1TiXYe-oBep44RfTCTqjNOQPcQJZ8eogf" aria-label="Resume" title="Resume">
+        <i class="img-icon" aria-hidden="true" style="--icon: url('resumebut.png')"></i>
+      </a>
+      <a class="icon-btn" href="about.html" aria-label="About Me" title="About Me">
+        <i class="img-icon" aria-hidden="true" style="--icon: url('aboutbut2.png')"></i>
+      </a>
+      <a class="icon-btn" href="contact.html" aria-label="Contact" title="Contact">
+        <i class="img-icon" aria-hidden="true" style="--icon: url('contactbut4.png')"></i>
+      </a>
+    </nav>
+
+    <header id="page-title">
+      <h1>Welcome to my<br>Design Universe</h1>
+      <p id="page-subtitle">Hi! I am Radhika Singh, a product designer<br>shaping meaningful stories through design.</p>
+    </header>
+
+    <div id="viewer" aria-label="360 viewer (offline demo)">
+      <canvas id="bg" width="800" height="600"></canvas>
+      <img id="sun" src="sun.png" alt="" />
+      <!-- Pillars injected here -->
+    </div>
+
+    <div id="drag-arrows" aria-hidden="true">
+      <img src="arrow.png" class="da-arrow left"  alt="">
+      <img src="arrow.png" class="da-arrow right" alt="">
+    </div>
+
+    <div id="hud">
+      <span class="hud-text"><b>Drag horizontally</b> to look around.</span>
+    </div>
+  </div>
+
+  <!-- Load your app as a module so we can import THREE + loaders inside -->
+  <script type="module" src="script.js"></script>
+</body>
+</html>
