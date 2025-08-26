@@ -1,0 +1,752 @@
+html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
+#app { position: fixed; inset: 0; display: grid; grid-template-rows: 1fr; }
+#viewer { position: relative; inset: 0; overflow: hidden; perspective: 1200px; }
+
+/* Panoramic background canvas */
+#bg { position: absolute; inset: 0; z-index: 0; display: block; }
+
+/* ===== CURVED CAPSULE PILLAR (toy-diorama style, dense 3D look) ===== */
+.pillar { position: absolute; transform: translate(-50%,-100%); transform-style: preserve-3d; z-index: 2; }
+.capsule { position: relative; width: var(--w,20px); height: var(--h,10px); border-radius: 40px; overflow: visible; transform-style: preserve-3d; }
+
+/* Main body material — layered gradients for curvature + specular */
+.capsule .body {
+  position: absolute; inset: 0; border-radius: inherit; overflow: hidden;
+  background:
+    radial-gradient(180% 120% at 30% 0%, rgba(255,255,255,.28), rgba(255,255,255,0) 45%), /* rim light */
+    linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,0) 42%),              /* top softlight */
+    linear-gradient(180deg, #6FA9FF 0%, #3E66FF 58%, #2442B3 100%);                       /* base */
+  box-shadow: inset 0 -36px 50px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.18);
+}
+
+/* Curved top dome — an ellipse rotated in 3D to sell volume */
+.capsule .top-dome {
+  position: absolute; left: 50%; top: -14px; width: calc(var(--w,170px) * 0.96); height: 56px;
+  transform: translateX(-50%) rotateX(72deg); transform-origin: center bottom; border-radius: 999px/70px; overflow: hidden;
+  background:
+    radial-gradient(120% 160% at 40% 20%, rgba(255,255,255,.55), rgba(255,255,255,0) 60%),
+    linear-gradient(180deg, #8DC0FF, #3C5FE0);
+  filter: blur(.2px);
+}
+
+/* Extra vertical bevels to round the sides */
+.capsule .edgeL, .capsule .edgeR { position:absolute; top:0; bottom:0; width:20px; pointer-events:none; border-radius: 40px; }
+.capsule .edgeL { left:0; background: linear-gradient(90deg, rgba(255,255,255,.30), rgba(255,255,255,0)); }
+.capsule .edgeR { right:0; background: linear-gradient(270deg, rgba(255,255,255,.18), rgba(255,255,255,0)); }
+
+/* Bottom shading — stronger AO and vignette for density */
+.capsule .bottom-shade {
+  position: absolute; left:0; right:0; bottom:0; height: 46%; border-bottom-left-radius: 40px; border-bottom-right-radius: 40px;
+  background: radial-gradient(120% 120% at 50% 100%, rgba(0,0,0,.55), rgba(0,0,0,0) 65%);
+  pointer-events: none;
+}
+
+
+.capsule .label {
+
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translate(-50%, -30px);  /* pull upwards manually */
+  
+  font-family: 'Manrope', sans-serif;
+  font-size: 20px;       /* smaller than the big page-title */
+  font-weight: 700;
+  color: #ffffff;
+
+  margin: 0;
+  white-space: nowrap;
+  
+
+}
+
+
+
+/* Diorama plinth + contact shadow 
+.pillar .plinth { position:absolute; left:50%; bottom:-12px; width:240px; height:66px; transform:translateX(-50%) rotateX(60deg); transform-origin:center bottom; border-radius:50%; background:
+    radial-gradient(ellipse at center, rgba(0,0,0,.65) 0%, rgba(0,0,0,0) 62%),
+    radial-gradient(ellipse at center, #141C34 0%, #0B1226 70%);
+  filter: blur(1.2px); }
+*/
+/* HUD */
+#hud { position: absolute; left: 50%; bottom: 2vh; transform: translateX(-50%); z-index: 3; background: rgba(10,12,18,.6); color: #e9ecf8; border: 1px solid #2a3042; border-radius: 1.25vw; padding: 1vh 1.25vw;  font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+/* Gradient / glow text inside the HUD */
+#hud .hud-text {
+  display: inline-block;                /* required for background-clip */
+  font-family: 'Manrope', sans-serif;   /* same font */
+  font-weight: 500;                     /* tweak if you want it lighter/heavier */
+  font-size: 18px;
+  /* you can also set a size here if desired, e.g.: font-size: 14px; */
+
+  /* same gradient as the H1 */
+  background: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #eaf2ff 18%,
+    #78b8ff 40%,
+    #3a8bff 62%,
+    #8cc4ff 82%,
+    #d9ecff 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;  /* Safari/Chrome */
+  color: transparent;                    /* fallback */
+
+  /* subtle glow, same feel as H1 */
+  text-shadow: 0 0 24px rgba(80, 150, 255, 0.12);
+}
+
+/* Big arrows overlay — centered above the HUD, over pillars */
+#drag-arrows{
+  position:absolute;
+  left:50%;
+  bottom:110px;                   /* sits above the HUD (which is bottom:12px) */
+  transform:translateX(-50%);
+  z-index:3;                      /* above pillars (z:2), same layer as HUD */
+  width:min(70vw, 900px);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  pointer-events:none;            /* doesn't block dragging */
+}
+
+.da-arrow{
+  width:clamp(56px, 8vw, 140px);  /* BIG & responsive */
+  height:auto;
+  opacity:.9;
+  animation: da-blink 1.6s ease-in-out infinite;
+  filter: drop-shadow(0 8px 20px rgba(0, 0, 0, 0.35));
+  user-select:none;
+}
+
+.da-arrow.left  { transform:scaleX(-1); } /* flip the same asset */
+
+
+@keyframes da-blink{
+  0%   { opacity:.28; }
+  50%  { opacity:1;   }
+  100% { opacity:.28; }
+}
+
+/* Fade them away once we’ve detected a real drag */
+#drag-arrows.fade-out{
+  opacity:0;
+  transform:translate(-50%,8px) scale(.98);
+  transition:opacity 420ms ease, transform 420ms ease;
+}
+
+/* Optional: slightly smaller on phones */
+@media (max-width:640px){
+  #drag-arrows{ bottom:96px; width:min(78vw, 700px); }
+  .da-arrow{ width:clamp(44px, 9vw, 110px); }
+}
+
+
+/* Smooth animations for the capsule look/feel */
+.pillar .capsule {
+  transition: transform 180ms ease, filter 180ms ease, box-shadow 180ms ease;
+}
+
+/* Glow + slight punch while hovered */
+.pillar.hover .capsule {
+  /* soft outer glow + a touch brighter/saturated */
+  filter: drop-shadow(0 10px 24px rgba(90,140,255,.45)) brightness(1.05) saturate(1.06);
+  /* subtle rim to sell "glow" */
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.18),
+    0 0 0 2px rgba(140,180,255,.25);
+}
+
+/* (Optional) make the label feel a tad crisper on hover */
+.pillar.hover .label {
+  filter: brightness(1.08);
+  transition: filter 160ms ease;
+}
+
+/* === PNG sprite-based pillar (overrides) === */
+
+/* Ensure the outer container itself has no painted background */
+.capsule { background: none !important; }
+
+/* Hide the CSS-drawn cylinder layers */
+.capsule .body,
+.capsule .top-dome,
+.capsule .edgeL,
+.capsule .edgeR,
+.capsule .bottom-shade {
+  display: none !important;
+}
+.capsule {
+  border: none !important;     /* kill any border */
+  outline: none !important;    /* kill focus outline */
+  background: none !important; /* you already hid the painted gradients */
+}
+/* The <img> that will visually be the pillar (added in Step 2 JS/HTML) */
+.capsule .sprite {
+  position: absolute;
+  inset: 0;              /* fill the capsule box */
+  width: 100%;
+  height: 100%;
+  object-fit: contain;   /* keep image aspect; fit within --w x --h */
+  pointer-events: none;  /* clicks still hit the .pillar wrapper */
+  transform: translateZ(0); /* keep it in the 3D stacking context */
+}
+/* Round only the sprite image, leave the pillar box square */
+
+
+.pillar.hover .capsule {
+  border: none !important;
+  outline: none !important;
+}
+/* Keep your existing hover glow that targets .capsule.
+   If you *prefer* the glow to affect only the image, you can instead use:
+   .pillar.hover .capsule .sprite { filter: drop-shadow(...) brightness(...) saturate(...); }
+   …but don't do both, or the effect will stack. */
+/* remove any shadow/filters from the capsule on hover */
+.pillar.hover .capsule {
+  box-shadow: none !important;
+  filter: none !important;
+  border: none !important;
+  outline: none !important;
+}
+
+/* apply the glow to the PNG instead */
+.pillar.hover .capsule .sprite {
+  filter: drop-shadow(0 10px 24px rgba(90,140,255,.45)) brightness(1.05) saturate(1.06);
+}
+
+/* also ensure the base state has no shadow */
+.capsule { box-shadow: none !important; }
+.capsule { border-radius: 0 !important; }
+
+#page-title {
+  position: absolute;
+  top: 0.001vh;          /* distance from top */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;         /* above background & pillars */
+  text-align: center;
+}
+
+#page-title h1 {
+  font-family: 'Manrope', sans-serif;
+  font-size: 5vw;        /* adjust later */
+  font-weight: 500;       /* make it bold like the screenshot */
+  margin: 0;
+  padding: 2vh 3.5vw;
+  border-radius: 1.5vw;   
+
+  /* ✨ Gradient text fill */
+  background: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #eaf2ff 18%,
+    #78b8ff 40%,
+    #3a8bff 62%,
+    #8cc4ff 82%,
+    #d9ecff 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-fill-color: transparent;
+
+  /* optional glow for contrast */
+  text-shadow: 0 0 2.25vw rgba(80,150,255,0.08); /* 18px -> 2.25vw */
+}
+
+/* space the subtitle from the H1 */
+#page-title h1 { margin-bottom: 1.666vh; }
+
+/* subtitle */
+#page-subtitle {
+  font-family: 'Manrope', sans-serif;     /* same font */
+  font-weight: 500;                        /* slightly lighter than H1 */
+  font-size: 1.2vw;     /* responsive like your H1 */
+  line-height: 1.25;
+  letter-spacing: 0.2px;
+  color: #cbd7ff;                          /* soft light-blue/grey */
+  text-align: center;
+  margin: 0;                               /* let H1’s bottom margin handle spacing */
+  opacity: 0.95;                           /* subtle softness */
+  text-shadow: 0 0 18px rgba(80,150,255,0.08); /* tiny glow to match H1 feel */
+}
+
+/* (optional) if you want one word accented like the screenshot:
+#page-subtitle .accent {
+  background: linear-gradient(90deg, #78b8ff 0%, #3a8bff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+*/
+
+/* --- Intro overlay --- */
+#intro {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background: #000;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  opacity: 1;
+  pointer-events: auto;
+  transition: opacity 600ms ease; /* fade-out of overlay */
+}
+
+#intro video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;       /* fill screen */
+  transform-origin: center center;
+  transform: scale(1);     /* will zoom to ~1.12 */
+  transition: transform 800ms ease, opacity 600ms ease;
+}
+
+#intro .vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at center,
+      rgba(0,0,0,0) 55%,
+      rgba(0,0,0,0.35) 80%,
+      rgba(0,0,0,0.6) 100%);
+}
+
+/* Optional skip button */
+#skipIntro {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1;
+  border: 1px solid rgba(255,255,255,.35);
+  background: rgba(0,0,0,.35);
+  color: #fff;
+  font: 600 12px/1 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  padding: 6px 10px;
+  border-radius: 10px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+
+/* Cross-fade the app in */
+#app {
+  opacity: 0;
+  transition: opacity 600ms ease;
+}
+body.app-ready #app {
+  opacity: 1;
+}
+
+/* During intro, keep wheel/touch from scrolling the page */
+body.lock-scroll {
+  overflow: hidden;
+}
+
+/* Top-right circular icon buttons (glassy dark, like the screenshot) */
+#top-actions {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 6;                 /* above title & viewer */
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.icon-btn {
+  --size: 64px;               /* circle size */
+  width: var(--size);
+  height: var(--size);
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  text-decoration: none;
+
+  /* dark glass gradient + subtle inner light */
+  
+  border: 1px solid rgba(120,140,200,0.22);
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+
+
+.icon-btn svg {
+  width: 28px;
+  height: 28px;
+  fill: none;
+  /* icon as stroked glyph to match the look */
+  stroke: #e8f0ff;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  /* for icons drawn as filled paths, also set fill so they’re visible */
+  fill: #e8f0ff;
+  opacity: 0.92;
+}
+
+.icon-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(150,180,255,0.35);
+  box-shadow:
+    inset 0 -10px 22px rgba(0,0,0,0.32),
+    0 12px 28px rgba(20,30,60,0.55),
+    0 0 0 2px rgba(120,170,255,0.15);
+}
+
+.icon-btn:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 0 -4px 12px rgba(0,0,0,0.4),
+    0 6px 14px rgba(0,0,0,0.4);
+}
+
+.icon-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(150,180,255,0.4),
+    0 0 0 6px rgba(150,180,255,0.18);
+}
+
+/* Make sure the header title doesn’t collide on small screens */
+@media (max-width: 640px) {
+  #top-actions { top: 12px; right: 12px; gap: 10px; }
+  .icon-btn { --size: 54px; }
+  #page-title h1 { font-size: clamp(42px, 10vw, 92px); }
+}
+
+/* Smooth transitions for UI */
+#page-title, #page-title h1, #top-actions, #hud {
+  transition: opacity 240ms ease, transform 300ms ease, filter 300ms ease;
+  will-change: opacity, transform, filter;
+}
+
+/* When zooming, fade/blur UI */
+body.zooming #page-title,
+body.zooming #page-title * ,
+body.zooming #top-actions,
+body.zooming #top-actions * ,
+body.zooming #hud {
+  opacity: 0 !important;
+  filter: blur(2px);
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+
+/* Show custom cursor only on devices with a fine pointer */
+@media (pointer: fine) {
+  html, body { cursor: none; }      /* hide system cursor */
+  #cursor { position: fixed; inset: 0; pointer-events: none; z-index: 99999; }
+
+  .cursor-dot {
+    position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
+    will-change: transform, opacity;
+  }
+
+  
+  /* Center dot */
+  /* Replace your current .cursor-dot block with this */
+  .cursor-dot {
+    position: absolute;
+    left: 0; top: 0;
+    transform: translate(-50%, -50%);
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #fff;
+
+    /* kill smoothing that causes lag */
+    transition: none;              /* <- was 120ms */
+    will-change: transform;        /* keep this for perf */
+    backface-visibility: hidden;   /* small compositing win */
+  }
+
+  /* Click pulse */
+  .cursor-ring.click {
+    animation: cursor-pulse 240ms ease-out;
+  }
+  @keyframes cursor-pulse {
+    0%   { transform: translate(-50%,-50%) scale(1);   opacity: 1; }
+    70%  { transform: translate(-50%,-50%) scale(1.6); opacity: .6; }
+    100% { transform: translate(-50%,-50%) scale(1);   opacity: 1; }
+  }
+
+  /* Trailing ghosts */
+  
+}
+.cursor-dot.click {
+  animation: cursor-pulse 240ms ease-out;
+}
+
+@keyframes cursor-pulse {
+  0%   { transform: translate(-50%, -50%) scale(1);   opacity: 1; }
+  70%  { transform: translate(-50%, -50%) scale(1.6); opacity: .6; }
+  100% { transform: translate(-50%, -50%) scale(1);   opacity: 1; }
+}
+
+
+
+html, body {
+  cursor: none !important;  /* fully hide native cursor */
+}
+
+.cursor-ring { display: none !important; }
+/* Remove/override these: */
+#viewer { cursor: none !important; }
+#viewer.dragging { cursor: none !important; }
+
+input, textarea, [contenteditable="true"], a, a:hover, button {
+  cursor: none !important;
+}
+/* Top-left container (mirrors top-right positioning) */
+#top-left {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 6;
+}
+
+/* Make a rectangular “pill” variant of icon-btn */
+.icon-btn.pill-btn {
+  /* inherit icon-btn visuals */
+  --size: 48px;                 /* button height (keeps same feel) */
+  height: var(--size);
+  min-width: 140px;             /* base width; grows with text */
+  padding: 0 18px;              /* horizontal padding for text */
+  border-radius: 14px;          /* slightly rounded rectangle */
+  display: inline-flex;         /* align text nicely */
+  align-items: center;
+  justify-content: center;
+  gap: 10px;                    /* if you later add an icon + text */
+  text-decoration: none;
+}
+
+/* Text inside the pill */
+.icon-btn.pill-btn span {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0.2px;
+  color: #e8f0ff;               /* same as your icon color */
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* Keep all the same hover/active/focus states from .icon-btn */
+.icon-btn.pill-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(150,180,255,0.35);
+  box-shadow:
+    inset 0 -10px 22px rgba(0,0,0,0.32),
+    0 12px 28px rgba(20,30,60,0.55),
+    0 0 0 2px rgba(120,170,255,0.15);
+}
+
+.icon-btn.pill-btn:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 0 -4px 12px rgba(0,0,0,0.4),
+    0 6px 14px rgba(0,0,0,0.4);
+}
+
+.icon-btn.pill-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(150,180,255,0.4),
+    0 0 0 6px rgba(150,180,255,0.18);
+}
+
+/* Responsive tweak: shrink a bit on small screens */
+@media (max-width: 640px) {
+  #top-left { top: 12px; left: 12px; }
+  .icon-btn.pill-btn {
+    --size: 42px;
+    min-width: 120px;
+    padding: 0 14px;
+    border-radius: 12px;
+  }
+  .icon-btn.pill-btn span {
+    font-size: 14px;
+  }
+}
+/* Monochrome, tintable icon using CSS masks */
+.img-icon {
+  width: 32px;
+  height: 32px;
+  display: inline-block;
+
+  /* color of the icon (matches your current svg stroke/fill tone) */
+  background-color: #e8f0ff;
+
+  /* mask the image so it takes the background-color */
+  -webkit-mask-image: var(--icon);
+  mask-image: var(--icon);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+
+  /* crisp rendering */
+  image-rendering: -webkit-optimize-contrast;
+}
+
+/* Optionally brighten/tint on hover to match your .icon-btn hover feel */
+.icon-btn:hover .img-icon {
+  background-color: #ffffff;
+}
+
+#intro { display: none !important; }
+#app  { opacity: 1 !important; }   /* defeats the cross-fade */
+
+
+/* When not hovered, shards fall neatly back into the sphere */
+.pillar:not(.hover) .sphere-shard{
+  opacity: 1;
+}
+
+/* Keep your existing pillar hover glow but tone it down for glass */
+.pillar.hover .capsule,
+/* Reuse your existing label styles; just nudge closer to sphere */
+.pillar .label{
+  top: 100%; transform: translate(-50%, -18px);
+}
+
+/* Ensure label stays visible regardless */
+.pillar .label{ opacity: 1; transition: opacity 240ms ease; }
+
+/* Give the pillar a known width so left:50% centers the label correctly */
+.pillar{
+  width: var(--w, 220px);
+}
+
+/* The rotator gets all 3D transforms; the label stays outside of it */
+.pillar-rot{
+  position: relative;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+/* Label centered *under* the sphere */
+.pillar .label{
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translate(-50%, 10px); /* small gap below the sphere */
+  font-family: 'Manrope', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  margin: 0;
+  z-index: 3;                       /* above canvas */
+  pointer-events: none;
+}
+
+/* ========= PLANET PNG PILLARS ========= */
+.pillar {
+  width: var(--w, 220px); /* ensures label centering */
+}
+
+/* The rotator gets 3D transforms; label stays outside it */
+.pillar-rot{
+  position: relative;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+
+/* Planet container (replaces sphere-wrap) */
+.pillar .planet-wrap{
+  position: relative;
+  width:  min(var(--w,220px), var(--h,220px));
+  height: min(var(--w,220px), var(--h,220px));
+  margin: 0 auto;
+  transform-style: preserve-3d;
+}
+
+/* Planet PNG */
+.pillar .planet-img{
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  z-index: 1;
+  transition: opacity 800ms ease, transform 900ms ease;
+  filter: drop-shadow(0 20px 40px rgba(10,14,28,.55));
+  transform: rotate(90deg);        /* ← rotate clockwise */
+  transform-origin: 50% 50%;
+}
+
+/* Hover behavior: fade planet out, reveal image in */
+.pillar.hover .planet-img{
+  opacity: 0;
+  transform: rotate(90deg) scale(1.02);  /* ← keep the rotation on hover */
+}
+
+/* Reveal image (project thumb) that shows on hover */
+.pillar .reveal{
+  position: absolute;
+  inset: 12%;
+  border-radius: 16px;
+  overflow: hidden;
+  z-index: 2;
+  opacity: 0;
+  transform: scale(.94);
+  transition: opacity 360ms ease, transform 420ms cubic-bezier(.22,1,.36,1), filter 360ms ease;
+  box-shadow: 0 6px 16px rgba(0,0,0,.35), inset 0 0 0 2px rgba(255,255,255,.18);
+}
+.pillar .reveal img{
+  width: 100%; height: 100%; object-fit: cover; transform: scale(1.02);
+}
+
+/* Hover behavior: fade planet out, reveal image in */
+.pillar.hover .planet-img{ opacity: 0; transform: scale(1.02); transition: opacity 1500ms ease, transform 1500ms ease; }
+.pillar.hover .reveal{ opacity: 1; transform: scale(1); transition: opacity 1500ms ease, transform 1500ms cubic-bezier(.22,1,.36,1), filter 1500ms ease;}
+
+/* Keep your existing glow if you like */
+.pillar.hover .capsule,
+.pillar.hover .planet-wrap { filter: drop-shadow(0 10px 24px rgba(90,140,255,.35)); }
+
+/* Label centered *under* the planet (unchanged from your good version) */
+.pillar .label{
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  transform: translate(-50%, 10px);
+  font-family: 'Manrope', sans-serif;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  white-space: nowrap;
+  margin: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+
+/* Sun: vertically flipped and half offscreen to the right */
+#sun{
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+
+  /* center horizontally, place its CENTER on the bottom edge, and flip vertically */
+  transform: translateX(-50%) translateY(70%) scaleY(-1);
+  transform-origin: center;
+
+  /* size — tweak as you like */
+  width: clamp(240px, 36vw, 720px);
+  height: auto;
+
+  /* layer it between background (z:0) and pillars (z:2) */
+  z-index: 1;
+
+  /* don’t block dragging/clicks */
+  pointer-events: none;
+}
+
