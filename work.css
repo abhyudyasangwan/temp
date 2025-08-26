@@ -1,0 +1,466 @@
+html, body {
+  scroll-behavior: smooth;
+  margin: 0;
+  height: 100%;
+  background: #000;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+}
+
+.scene {
+  min-height: 100vh;   /* full screen per scene */
+  position: relative;
+}
+
+.scene { position: relative; min-height: 100vh; } /* already there, keep it */
+.viewer {
+  position: absolute;   /* <- key change */
+  inset: 0;             /* fill the .scene */
+  cursor: grab;
+  overflow: hidden;
+  perspective: 1200px;
+}
+
+.viewer.dragging { cursor: grabbing; }
+
+/* Panoramic background canvas */
+.bg { position: absolute; inset: 0; z-index: 0; display: block; }
+
+/* ===== CURVED CAPSULE PILLAR (toy-diorama style, dense 3D look) ===== */
+.pillar { position: absolute; transform: translate(-50%,-100%); transform-style: preserve-3d; z-index: 2; }
+.capsule { position: relative; width: var(--w,170px); height: var(--h,260px); border-radius: 40px; overflow: visible; transform-style: preserve-3d; }
+
+/* Main body material — layered gradients for curvature + specular */
+.capsule .body {
+  position: absolute; inset: 0; border-radius: inherit; overflow: hidden;
+  background:
+    radial-gradient(180% 120% at 30% 0%, rgba(255,255,255,.28), rgba(255,255,255,0) 45%), /* rim light */
+    linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,0) 42%),              /* top softlight */
+    linear-gradient(180deg, #6FA9FF 0%, #3E66FF 58%, #2442B3 100%);                       /* base */
+  box-shadow: inset 0 -36px 50px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.18);
+}
+
+/* Curved top dome — an ellipse rotated in 3D to sell volume */
+.capsule .top-dome {
+  position: absolute; left: 50%; top: -14px; width: calc(var(--w,170px) * 0.96); height: 56px;
+  transform: translateX(-50%) rotateX(72deg); transform-origin: center bottom; border-radius: 999px/70px; overflow: hidden;
+  background:
+    radial-gradient(120% 160% at 40% 20%, rgba(255,255,255,.55), rgba(255,255,255,0) 60%),
+    linear-gradient(180deg, #8DC0FF, #3C5FE0);
+  filter: blur(.2px);
+}
+
+/* Extra vertical bevels to round the sides */
+.capsule .edgeL, .capsule .edgeR { position:absolute; top:0; bottom:0; width:20px; pointer-events:none; border-radius: 40px; }
+.capsule .edgeL { left:0; background: linear-gradient(90deg, rgba(255,255,255,.30), rgba(255,255,255,0)); }
+.capsule .edgeR { right:0; background: linear-gradient(270deg, rgba(255,255,255,.18), rgba(255,255,255,0)); }
+
+/* Bottom shading — stronger AO and vignette for density */
+.capsule .bottom-shade {
+  position: absolute; left:0; right:0; bottom:0; height: 46%; border-bottom-left-radius: 40px; border-bottom-right-radius: 40px;
+  background: radial-gradient(120% 120% at 50% 100%, rgba(0,0,0,.55), rgba(0,0,0,0) 65%);
+  pointer-events: none;
+}
+
+/* Pillar label — match reference (plain text under planet/pillar) */
+.pillar { 
+  width: var(--w, 220px);              /* ensure a width so left:50% is meaningful */
+}
+
+.pillar .label {
+  position: absolute;
+  left: 50%;
+  top: 100%;                           /* put the label under the pillar */
+  transform: translate(-50%, -65px);    /* small gap below */
+  margin: 0;
+  padding: 0;
+
+  /* no chip visuals */
+  background: none !important;
+  border: 0 !important;
+  box-shadow: none !important;
+
+  /* typography (reference) */
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+  font-size: 20px;
+  color: #fff;
+  white-space: nowrap;
+  pointer-events: none;                 /* don’t steal clicks from the pillar */
+  z-index: 3;                           /* above canvas; stays within pillar’s stack */
+}
+
+/* Keep the subtle hover “crisp” if you like (optional) */
+.pillar.hover .label {
+  filter: brightness(1.08);
+  transition: filter 160ms ease;
+}
+
+
+/* Diorama plinth + contact shadow */
+.pillar .plinth { position:absolute; left:50%; bottom:-12px; width:240px; height:66px; transform:translateX(-50%) rotateX(60deg); transform-origin:center bottom; border-radius:50%; background:
+    radial-gradient(ellipse at center, rgba(0,0,0,.65) 0%, rgba(0,0,0,0) 62%),
+    radial-gradient(ellipse at center, #141C34 0%, #0B1226 70%);
+  filter: blur(1.2px); }
+
+/* HUD */
+.hud { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 3; background: rgba(10,12,18,.6); color: #e9ecf8; border: 1px solid #2a3042; border-radius: 10px; padding: 6px 10px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+
+/* Smooth animations for the capsule look/feel */
+.pillar .capsule {
+  transition: transform 180ms ease, filter 180ms ease, box-shadow 180ms ease;
+}
+
+/* Glow + slight punch while hovered */
+.pillar.hover .capsule {
+  /* soft outer glow + a touch brighter/saturated */
+  filter: drop-shadow(0 10px 24px rgba(90,140,255,.45)) brightness(1.05) saturate(1.06);
+  /* subtle rim to sell "glow" */
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.18),
+    0 0 0 2px rgba(140,180,255,.25);
+}
+
+/* (Optional) make the label feel a tad crisper on hover */
+.pillar.hover .label {
+  filter: brightness(1.08);
+  transition: filter 160ms ease;
+}
+
+/* === PNG sprite pillars (override the cylinder look) === */
+
+/* kill any paint on the capsule itself */
+.capsule {
+  background: none !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* hide all cylinder layers if they still get created anywhere */
+.capsule .body,
+.capsule .top-dome,
+.capsule .edgeL,
+.capsule .edgeR,
+.capsule .bottom-shade {
+  display: none !important;
+}
+
+/* the PNG that visually *is* the pillar */
+.capsule .sprite {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;     /* fits inside --w x --h, keeps aspect */
+  pointer-events: none;    /* let clicks hit the .pillar wrapper */
+  transform: translateZ(0);
+}
+
+/* move the hover glow from the capsule to the PNG */
+.pillar.hover .capsule { filter: none !important; box-shadow: none !important; }
+.pillar.hover .capsule .sprite {
+  filter: drop-shadow(0 10px 24px rgba(90,140,255,.45)) brightness(1.05) saturate(1.06);
+}
+
+/* If you don't want rounded clipping, uncomment:
+.capsule { border-radius: 0 !important; }
+*/
+/* Show custom cursor only on devices with a fine pointer */
+@media (pointer: fine) {
+  html, body { cursor: none; }      /* hide system cursor */
+  #cursor { position: fixed; inset: 0; pointer-events: none; z-index: 99999; }
+
+  .cursor-dot {
+    position: absolute; left: 0; top: 0; transform: translate(-50%, -50%);
+    will-change: transform, opacity;
+  }
+
+  
+  /* Center dot */
+  /* Replace your current .cursor-dot block with this */
+  .cursor-dot {
+    position: absolute;
+    left: 0; top: 0;
+    transform: translate(-50%, -50%);
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #fff;
+
+    /* kill smoothing that causes lag */
+    transition: none;              /* <- was 120ms */
+    will-change: transform;        /* keep this for perf */
+    backface-visibility: hidden;   /* small compositing win */
+  }
+
+  /* Click pulse */
+  .cursor-ring.click {
+    animation: cursor-pulse 240ms ease-out;
+  }
+  @keyframes cursor-pulse {
+    0%   { transform: translate(-50%,-50%) scale(1);   opacity: 1; }
+    70%  { transform: translate(-50%,-50%) scale(1.6); opacity: .6; }
+    100% { transform: translate(-50%,-50%) scale(1);   opacity: 1; }
+  }
+
+  /* Trailing ghosts */
+  
+}
+.cursor-dot.click {
+  animation: cursor-pulse 240ms ease-out;
+}
+
+@keyframes cursor-pulse {
+  0%   { transform: translate(-50%, -50%) scale(1);   opacity: 1; }
+  70%  { transform: translate(-50%, -50%) scale(1.6); opacity: .6; }
+  100% { transform: translate(-50%, -50%) scale(1);   opacity: 1; }
+}
+
+
+
+html, body {
+  cursor: none !important;  /* fully hide native cursor */
+}
+
+.cursor-ring { display: none !important; }
+/* Remove/override these: */
+.viewer { cursor: none !important; }
+.viewer.dragging { cursor: none !important; }
+
+input, textarea, [contenteditable="true"], a, a:hover, button {
+  cursor: none !important;
+}
+
+#page-title {
+  position: absolute;
+  top: 30px;          /* distance from top */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;         /* above background & pillars */
+  text-align: center;
+}
+
+#page-title h1 {
+  font-family: 'Manrope', sans-serif;
+  font-size: 104px;       /* adjust later */
+  font-weight: 500;       /* make it bold like the screenshot */
+  margin: 0;
+  padding: 12px 28px;
+  border-radius: 12px;
+
+  /* ✨ Gradient text fill */
+  background: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #eaf2ff 18%,
+    #78b8ff 40%,
+    #3a8bff 62%,
+    #8cc4ff 82%,
+    #d9ecff 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-fill-color: transparent;
+
+  /* optional glow for contrast */
+  text-shadow: 0 0 24px rgba(80, 150, 255, 0.12);
+}
+
+/* space the subtitle from the H1 */
+#page-title h1 { margin-bottom: 40px; }
+#page-subtitle {
+  font-family: 'Manrope', sans-serif;     /* same font */
+  font-weight: 500;                        /* slightly lighter than H1 */
+  font-size: clamp(12px, 2.2vw, 24px);     /* responsive like your H1 */
+  line-height: 1.25;
+  letter-spacing: 0.2px;
+  color: #cbd7ff;                          /* soft light-blue/grey */
+  text-align: center;
+  margin: 0;                               /* let H1’s bottom margin handle spacing */
+  opacity: 0.95;                           /* subtle softness */
+  text-shadow: 0 0 18px rgba(80,150,255,0.08); /* tiny glow to match H1 feel */
+}
+
+@media (max-width: 640px) {
+  #top-actions { top: 12px; right: 12px; gap: 10px; }
+  .icon-btn { --size: 54px; }
+  #page-title h1 { font-size: clamp(42px, 10vw, 92px); }
+}
+
+/* Smooth transitions for UI */
+#page-title, #page-title h1, #top-actions, .hud {
+  transition: opacity 240ms ease, transform 300ms ease, filter 300ms ease;
+  will-change: opacity, transform, filter;
+}
+
+/* When zooming, fade/blur UI */
+body.zooming #page-title,
+body.zooming #page-title * ,
+body.zooming #top-actions,
+body.zooming #top-actions * ,
+body.zooming .hud {
+  opacity: 0 !important;
+  filter: blur(2px);
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+/* HUD */
+#hud { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 3; background: rgba(10,12,18,.6); color: #e9ecf8; border: 1px solid #2a3042; border-radius: 10px; padding: 6px 10px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial; }
+/* Gradient / glow text inside the HUD */
+.hud .hud-text {
+  display: inline-block;                /* required for background-clip */
+  font-family: 'Manrope', sans-serif;   /* same font */
+  font-weight: 500;                     /* tweak if you want it lighter/heavier */
+  font-size: 18px;
+  /* you can also set a size here if desired, e.g.: font-size: 14px; */
+
+  /* same gradient as the H1 */
+  background: linear-gradient(
+    90deg,
+    #ffffff 0%,
+    #eaf2ff 18%,
+    #78b8ff 40%,
+    #3a8bff 62%,
+    #8cc4ff 82%,
+    #d9ecff 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;  /* Safari/Chrome */
+  color: transparent;                    /* fallback */
+
+  /* subtle glow, same feel as H1 */
+  text-shadow: 0 0 24px rgba(80, 150, 255, 0.12);
+}
+
+
+/* === Top button bars (matches reference UI) === */
+#top-actions {
+  position: fixed;          /* pin to viewport */
+  top: 20px;
+  right: 20px;
+  z-index: 6;               /* above title & viewer */
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+#top-left {
+  position: fixed;          /* pin to viewport */
+  top: 20px;
+  left: 20px;
+  z-index: 6;
+}
+
+/* Circular glassy icon button */
+.icon-btn {
+  --size: 64px;
+  width: var(--size);
+  height: var(--size);
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  text-decoration: none;
+
+  /* glass look */
+  background: transparent !important;
+  border: 1px solid rgba(120,140,200,0.22);
+  backdrop-filter: blur(8px);
+
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.icon-btn:hover {
+  transform: translateY(-2px);
+  border-color: rgba(150,180,255,0.35);
+  
+}
+
+.icon-btn:active {
+  transform: translateY(0);
+  box-shadow:
+    inset 0 -4px 12px rgba(0,0,0,0.4),
+    0 6px 14px rgba(0,0,0,0.4);
+}
+
+.icon-btn:focus-visible {
+  outline: none;
+  box-shadow:
+    0 0 0 2px rgba(150,180,255,0.4),
+    0 0 0 6px rgba(150,180,255,0.18);
+}
+
+/* Rect “pill” button for top-left */
+.icon-btn.pill-btn {
+  --size: 48px;                 /* height */
+  height: var(--size);
+  min-width: 140px;
+  padding: 0 18px;
+  border-radius: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.icon-btn.pill-btn span {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 600;
+  font-size: 16px;
+  letter-spacing: 0.2px;
+  color: #e8f0ff;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* Monochrome, tintable icon via CSS masks */
+.img-icon {
+  width: 32px;
+  height: 32px;
+  display: inline-block;
+  background-color: #e8f0ff;     /* icon color */
+  -webkit-mask-image: var(--icon);
+  mask-image: var(--icon);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+.icon-btn:hover .img-icon {
+  background-color: #ffffff;
+}
+
+/* Keep UI responsive */
+@media (max-width: 640px) {
+  #top-actions { top: 12px; right: 12px; gap: 10px; }
+  #top-left    { top: 12px; left: 12px; }
+  .icon-btn { --size: 54px; }
+  .icon-btn.pill-btn {
+    --size: 42px;
+    min-width: 120px;
+    padding: 0 14px;
+    border-radius: 12px;
+  }
+  .icon-btn.pill-btn span { font-size: 14px; }
+}
+
+/* Make them fade during zoom (match your existing rule set) */
+body.zooming #top-actions,
+body.zooming #top-actions *,
+body.zooming #top-left,
+body.zooming #top-left * {
+  opacity: 0 !important;
+  filter: blur(2px);
+  transform: translateY(-8px);
+  pointer-events: none;
+}
+
